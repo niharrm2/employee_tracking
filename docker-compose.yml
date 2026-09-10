@@ -1,0 +1,87 @@
+version: "3.9"
+
+# ============================================================================
+# Office Tracking System — Docker Compose (local dev)
+# ============================================================================
+# Services:
+#   api      — FastAPI + dashboard (uvicorn)
+#   pipeline — frame-sampling + AI detection loop
+#   mediamtx — test RTSP server (for dev without real cameras)
+#
+# Usage:
+#   docker compose up --build
+#   docker compose up api          # API only
+#   docker compose up pipeline     # pipeline only
+#
+# The SQLite database file is shared via a named volume between api and pipeline.
+# For production, replace with a PostgreSQL service and update config.yaml.
+# ============================================================================
+
+services:
+
+  # --------------------------------------------------------------------------
+  # FastAPI + Jinja2 Dashboard
+  # --------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: office_track_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - db_data:/app/data
+      - snapshot_data:/app/snapshots
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      - OFFICE_TRACK_CONFIG=/app/config.yaml
+      - OFFICE_TRACK_DB=/app/data/office_track.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # --------------------------------------------------------------------------
+  # Detection Pipeline
+  # --------------------------------------------------------------------------
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.pipeline
+    container_name: office_track_pipeline
+    volumes:
+      - db_data:/app/data
+      - snapshot_data:/app/snapshots
+      - ./config.yaml:/app/config.yaml:ro
+      # InsightFace model cache — avoids re-downloading on each restart
+      - insightface_cache:/root/.insightface
+      # Ultralytics model cache
+      - ultralytics_cache:/root/.config/Ultralytics
+    environment:
+      - OFFICE_TRACK_CONFIG=/app/config.yaml
+      - OFFICE_TRACK_DB=/app/data/office_track.db
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  # --------------------------------------------------------------------------
+  # Test RTSP server (mediamtx) — for development without real cameras
+  # Remove or comment out in production.
+  # --------------------------------------------------------------------------
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: office_track_rtsp
+    ports:
+      - "8554:8554"    # RTSP
+      - "8888:8888"    # HLS (optional, for browser preview)
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  snapshot_data:
+  insightface_cache:
+  ultralytics_cache:

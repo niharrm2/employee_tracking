@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Personnel Directory & Enrollment — VisionIQ Enterprise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="page-title-group">
+        <h1>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            Personnel Directory & Biometric Enrollment
+        </h1>
+        <p class="page-subtitle">Enrolled staff profiles, ArcFace 512-dimensional embeddings, and authorization controls.</p>
+    </div>
+    <button class="btn btn-primary" onclick="document.getElementById('enrollModal').classList.add('open')">
+        <svg viewBox="0 0 24 24" width="16" height="16" style="width:16px;height:16px;flex-shrink:0;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Enroll New Personnel
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>
+            <svg viewBox="0 0 24 24" width="16" height="16" style="width:16px;height:16px;flex-shrink:0;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            Authorized Personnel Registry
+        </h2>
+        <label class="filter-bar-inline" style="font-size: 12px; color: var(--text-muted); cursor: pointer;">
+            <input type="checkbox" id="showInactive" onchange="loadEmployees()" style="accent-color: var(--primary);"> 
+            Show Deactivated Profiles
+        </label>
+    </div>
+    <div class="card-body">
+        <div id="employeeTable"><div class="loading-spinner">Querying personnel registry...</div></div>
+    </div>
+</div>
+
+<!-- Modal Dialog -->
+<div class="modal-overlay" id="enrollModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Biometric Facial Enrollment</h3>
+            <button class="modal-close" onclick="document.getElementById('enrollModal').classList.remove('open')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="enrollForm" onsubmit="submitEnroll(event)">
+                <div class="form-group">
+                    <label>Employee Identifier (ID) *</label>
+                    <input type="text" id="empId" class="form-input" placeholder="e.g. EMP002" required>
+                </div>
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" id="empName" class="form-input" placeholder="e.g. Marcus Vance" required>
+                </div>
+                <div class="form-group">
+                    <label>Department / Business Unit</label>
+                    <input type="text" id="empDept" class="form-input" placeholder="e.g. Security Engineering">
+                </div>
+                <div class="form-group">
+                    <label>Reference Facial Imagery (3–5 Photos) *</label>
+                    <input type="file" id="empPhotos" class="form-input" accept="image/*" multiple required>
+                    <p class="form-hint">Provide clear, single-subject photos with varied head yaw/pitch angles for optimal ArcFace cosine matching.</p>
+                </div>
+                <div id="enrollStatus"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="document.getElementById('enrollModal').classList.remove('open')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="enrollBtn">
+                        <svg viewBox="0 0 24 24" width="16" height="16" style="width:16px;height:16px;flex-shrink:0;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Compute & Store Embedding
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+<!-- Biometric Reference Photo Modal -->
+<div class="modal-overlay" id="photoPreviewModal">
+    <div class="modal" style="max-width: 440px; text-align: center;">
+        <div class="modal-header">
+            <h3>Biometric Facial Reference</h3>
+            <button class="modal-close" onclick="document.getElementById('photoPreviewModal').classList.remove('open')">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 20px;">
+            <div style="width: 100%; max-width: 320px; margin: 0 auto 16px; border-radius: var(--radius-md); overflow: hidden; border: 2px solid var(--border-medium); box-shadow: var(--shadow-md); background: #000;">
+                <img id="photoModalImg" src="" alt="Biometric Reference" style="width: 100%; height: auto; display: block; object-fit: cover;" />
+            </div>
+            <div style="background: var(--bg-surface-elevated); padding: 12px; border-radius: var(--radius-sm); font-size: 12px; line-height: 1.6; text-align: left; border: 1px solid var(--border-subtle);">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--text-muted);">Subject:</span>
+                    <strong id="photoModalName" style="color: var(--text-primary);">—</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--text-muted);">Personnel ID:</span>
+                    <span class="mono" id="photoModalId" style="color: var(--text-accent);">—</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--text-muted);">Department:</span>
+                    <span id="photoModalDept" style="color: var(--text-secondary);">—</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Feature Space:</span>
+                    <span class="badge badge-info" style="font-size: 10px;">ArcFace 512-Dim Vector</span>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" style="justify-content: center;">
+            <button type="button" class="btn btn-outline" onclick="document.getElementById('photoPreviewModal').classList.remove('open')">Close Viewer</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
+    loadEmployees();
+});
+
+function openPhotoModal(url, name, id, dept) {
+    document.getElementById('photoModalImg').src = url;
+    document.getElementById('photoModalName').textContent = name;
+    document.getElementById('photoModalId').textContent = id;
+    document.getElementById('photoModalDept').textContent = dept;
+    document.getElementById('photoPreviewModal').classList.add('open');
+}
+
+async function loadEmployees() {
+    const showInactive = document.getElementById('showInactive').checked;
+    try {
+        const data = await apiFetch(`/api/employees?active_only=${!showInactive}`);
+        if (data.length === 0) {
+            document.getElementById('employeeTable').innerHTML = 
+                '<p class="empty-state">No personnel registered in the biometric directory yet.</p>';
+            return;
+        }
+        const rows = data.map(e => `
+            <tr class="${!e.active ? 'row-inactive' : ''}">
+                <td style="width: 56px; text-align: center; vertical-align: middle;">
+                    <div style="position: relative; width: 42px; height: 42px; margin: 0 auto; cursor: pointer;" 
+                         onclick="openPhotoModal('${escHtml(e.photo_url || `/api/employees/${e.employee_id}/photo`)}', '${escHtml(e.name)}', '${escHtml(e.employee_id)}', '${escHtml(e.department || 'General')}')"
+                         title="Click to expand biometric facial reference">
+                        <img src="${escHtml(e.photo_url || `/api/employees/${e.employee_id}/photo`)}" 
+                             alt="${escHtml(e.name)}" 
+                             style="width: 42px; height: 42px; border-radius: var(--radius-sm); object-fit: cover; border: 1px solid var(--border-medium); background: var(--bg-surface-elevated); box-shadow: var(--shadow-sm); transition: transform 0.15s ease;"
+                             onmouseover="this.style.transform='scale(1.1)'"
+                             onmouseout="this.style.transform='scale(1.0)'"
+                             loading="lazy"
+                        />
+                    </div>
+                </td>
+                <td class="mono"><strong>${escHtml(e.employee_id)}</strong></td>
+                <td><strong>${escHtml(e.name)}</strong></td>
+                <td>${escHtml(e.department || 'General')}</td>
+                <td class="mono text-muted">${escHtml(e.enrolled_at ? e.enrolled_at.substring(0, 10) : '—')}</td>
+                <td><span class="badge ${e.active ? 'badge-success' : 'badge-danger'}">${e.active ? 'ACTIVE' : 'DEACTIVATED'}</span></td>
+                <td>
+                    ${e.active ? `
+                        <button class="btn btn-sm btn-danger" onclick="deactivateEmployee('${escHtml(e.employee_id)}', '${escHtml(e.name)}')">
+                            Revoke Access
+                        </button>
+                    ` : '<span class="text-muted">—</span>'}
+                </td>
+            </tr>
+        `).join('');
+        document.getElementById('employeeTable').innerHTML = `
+            <table class="data-table">
+                <thead><tr><th style="width: 56px; text-align: center;">Photo</th><th>Employee ID</th><th>Full Name</th><th>Department</th><th>Enrolled Date</th><th>Access Status</th><th>Actions</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    } catch(e) {
+        document.getElementById('employeeTable').innerHTML = '<p class="error-state">Failed to query employee directory.</p>';
+    }
+}
+
+async function submitEnroll(e) {
+    e.preventDefault();
+    const btn = document.getElementById('enrollBtn');
+    const status = document.getElementById('enrollStatus');
+    const photos = document.getElementById('empPhotos').files;
+
+    if (photos.length < 3) { status.innerHTML = '<p class="error-state">Minimum of 3 facial reference photos required.</p>'; return; }
+    if (photos.length > 5) { status.innerHTML = '<p class="error-state">Maximum 5 reference photos allowed per subject.</p>'; return; }
+
+    btn.disabled = true;
+    btn.innerHTML = 'Computing embeddings...';
+    status.innerHTML = '<p class="text-muted">Extracting ArcFace 512-dim normalized vectors...</p>';
+
+    const formData = new FormData();
+    formData.append('employee_id', document.getElementById('empId').value);
+    formData.append('name', document.getElementById('empName').value);
+    formData.append('department', document.getElementById('empDept').value);
+    for (const photo of photos) formData.append('photos', photo);
+
+    try {
+        const token = localStorage.getItem('token');
+        const resp = await fetch('/api/employees/enroll', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData,
+        });
+        const result = await resp.json();
+        if (!resp.ok) throw new Error(result.detail || 'Enrollment pipeline failed');
+        status.innerHTML = `<p class="success-state">✓ ${escHtml(result.message)} (${result.photos_used} facial vectors normalized)</p>`;
+        setTimeout(() => {
+            document.getElementById('enrollModal').classList.remove('open');
+            document.getElementById('enrollForm').reset();
+            status.innerHTML = '';
+            loadEmployees();
+        }, 1500);
+    } catch(err) {
+        status.innerHTML = `<p class="error-state">Error: ${escHtml(err.message)}</p>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg viewBox="0 0 24 24" width="16" height="16" style="width:16px;height:16px;flex-shrink:0;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Compute & Store Embedding
+        `;
+    }
+}
+
+async function deactivateEmployee(id, name) {
+    if (!confirm(`Revoke biometric recognition credentials for ${name} (${id})?`)) return;
+    try {
+        await apiFetch(`/api/employees/${id}`, {method: 'DELETE'});
+        loadEmployees();
+    } catch(e) { alert('Failed to revoke access.'); }
+}
+</script>
+{% endblock %}

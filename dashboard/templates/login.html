@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication — VisionIQ Enterprise</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="login-body">
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-brand-header">
+                <div class="login-brand-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        <circle cx="12" cy="11" r="3"></circle>
+                    </svg>
+                </div>
+                <h1 class="login-title">VisionIQ Enterprise</h1>
+                <p class="login-subtitle">Edge Vision & Facility Intelligence Console</p>
+            </div>
+
+            <form id="loginForm" onsubmit="doLogin(event)">
+                <div class="form-group">
+                    <label>Operator Username</label>
+                    <input type="text" id="username" class="form-input" placeholder="e.g. admin" required autofocus autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>Security Credential / Password</label>
+                    <input type="password" id="password" class="form-input" placeholder="••••••••••••" required autocomplete="current-password">
+                </div>
+                <div id="loginError" class="error-state" style="display:none; margin-bottom: 12px;"></div>
+                <button type="submit" class="btn btn-primary btn-full" id="loginBtn" style="padding: 10px; font-weight: 600; margin-top: 8px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                        <polyline points="10 17 15 12 10 7"></polyline>
+                        <line x1="15" y1="12" x2="3" y2="12"></line>
+                    </svg>
+                    Authenticate Session
+                </button>
+            </form>
+
+            <div class="login-footer-note">
+                <strong>RESTRICTED FACILITY CONSOLE</strong><br>
+                Unauthorized access attempts are monitored and cryptographically audited.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if (localStorage.getItem('token')) {
+            window.location.href = '/';
+        }
+
+        async function doLogin(e) {
+            e.preventDefault();
+            const btn = document.getElementById('loginBtn');
+            const errDiv = document.getElementById('loginError');
+            btn.disabled = true;
+            btn.innerHTML = 'Verifying credentials...';
+            errDiv.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('username', document.getElementById('username').value);
+            formData.append('password', document.getElementById('password').value);
+
+            try {
+                const resp = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Authentication failed. Please verify credentials.');
+
+                localStorage.setItem('token', data.access_token);
+                localStorage.setItem('role', data.role);
+                localStorage.setItem('username', data.username);
+                window.location.href = '/';
+            } catch(err) {
+                errDiv.textContent = err.message;
+                errDiv.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                        <polyline points="10 17 15 12 10 7"></polyline>
+                        <line x1="15" y1="12" x2="3" y2="12"></line>
+                    </svg>
+                    Authenticate Session
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

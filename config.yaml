@@ -1,0 +1,187 @@
+# ============================================================================
+# Office Tracking System — Master Configuration
+# ============================================================================
+# Every feature is independently toggleable. Emotion detection is OFF by
+# default — see the comment in the emotion section for the reasoning.
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+database:
+  # For local dev use "sqlite", for production use "postgresql"
+  engine: "sqlite"
+  # SQLite: path to the database file
+  sqlite_path: "office_track.db"
+  # PostgreSQL (used when engine == "postgresql"):
+  # postgresql:
+  #   host: "localhost"
+  #   port: 5432
+  #   database: "office_track"
+  #   user: "office_track"
+  #   password: "changeme"
+
+# ---------------------------------------------------------------------------
+# Snapshot storage
+# ---------------------------------------------------------------------------
+snapshots:
+  enabled: true
+  # Directory where captured frame snapshots are saved (organized by date/camera)
+  base_dir: "snapshots"
+
+# ---------------------------------------------------------------------------
+# Cameras
+# ---------------------------------------------------------------------------
+cameras:
+  - id: "entrance_cam"
+    name: "Main Entrance"
+    rtsp_url: "videos/entrance.mp4"
+    zone: "Entrance"
+    zone_type: "entrance"        # entrance | work | non_work
+    enabled: true
+
+  - id: "floor1_cam"
+    name: "Floor 1 — Open Office"
+    rtsp_url: "videos/desk_phone.mp4"
+    zone: "Floor 1"
+    zone_type: "work"
+    enabled: true
+
+  - id: "floor2_cam"
+    name: "Floor 2 — Visitor Reception"
+    rtsp_url: "videos/visitor.mp4"
+    zone: "Floor 2"
+    zone_type: "work"
+    enabled: true
+
+  - id: "pantry_cam"
+    name: "Pantry"
+    rtsp_url: "videos/pantry_fire.mp4"
+    zone: "Pantry"
+    zone_type: "non_work"
+    enabled: true
+
+  - id: "lounge_cam"
+    name: "Lounge"
+    rtsp_url: "videos/pantry_break.mp4"
+    zone: "Lounge"
+    zone_type: "non_work"
+    enabled: true
+
+# ---------------------------------------------------------------------------
+# Sampling intervals (seconds)
+# ---------------------------------------------------------------------------
+# How often each feature runs per camera. Lower = more CPU load.
+# These are *minimum* intervals — the pipeline won't run a feature on a
+# camera more often than this, but may run slightly less often under load.
+sampling:
+  face_recognition: 3            # fast sampling for live test
+  phone_detection: 3
+  fire_smoke_detection: 3
+  emotion_detection: 60
+
+# ---------------------------------------------------------------------------
+# Frame capture
+# ---------------------------------------------------------------------------
+capture:
+  timeout_seconds: 10            # max wait for RTSP connection + frame grab
+  max_retries: 2                 # retries on failure before skipping
+  retry_delay_seconds: 1         # delay between retries
+
+# ---------------------------------------------------------------------------
+# Feature toggles — each can be independently enabled/disabled
+# ---------------------------------------------------------------------------
+features:
+  face_recognition: true
+  attendance_tracking: true      # depends on face_recognition
+  zone_presence: true            # multi-camera zone tracking
+  visitor_logging: true          # log unknown/unmatched faces
+  live_desk_view: true           # "who's at desk right now"
+  break_tracking: true           # gap-based break duration
+  non_work_zone_tracking: true   # time in pantry/lounge
+  phone_detection: true
+  fire_smoke_detection: true
+
+  # ⚠ EMOTION DETECTION — DISABLED BY DEFAULT
+  # Facial-expression-based emotion inference has real accuracy limitations:
+  # - FER2013-trained models achieve ~65-70% accuracy under ideal conditions
+  # - Compressed, low-res, sampled camera frames reduce this further
+  # - Expressions are a weak proxy for actual emotional state
+  # - This feature raises significant employee privacy/trust considerations
+  # Enable deliberately after consulting with HR/legal, not by default.
+  emotion_detection: false
+
+# ---------------------------------------------------------------------------
+# Work schedule
+# ---------------------------------------------------------------------------
+work_schedule:
+  start_time: "09:00"            # HH:MM, 24-hour format
+  end_time: "18:00"
+  grace_period_minutes: 15       # minutes after start / before end
+  timezone: "Asia/Kolkata"       # IANA timezone
+
+# ---------------------------------------------------------------------------
+# Thresholds
+# ---------------------------------------------------------------------------
+thresholds:
+  # Face recognition
+  face_match_confidence: 0.4     # cosine similarity threshold (0-1); lower = stricter
+  min_face_detection_confidence: 0.5
+
+  # Attendance
+  min_presence_minutes: 0.1      # 0.1 min (6 sec) for immediate testing
+                                 # (avoids a stray detection counting as present)
+
+  # Live desk view
+  live_window_minutes: 10        # sighting within last N minutes = "at desk"
+
+  # Break tracking
+  min_break_gap_minutes: 10      # gap between sightings must exceed this to count
+                                 # as a break (avoids counting short walk-aways)
+
+  # Phone detection
+  phone_detection_confidence: 0.5
+
+  # Fire/smoke detection
+  fire_min_area_ratio: 0.01      # minimum fraction of frame area for fire heuristic
+  smoke_min_area_ratio: 0.10     # minimum fraction of frame area for smoke heuristic
+
+  # Emotion detection
+  emotion_min_confidence: 0.5
+
+# ---------------------------------------------------------------------------
+# Fire/smoke model configuration
+# ---------------------------------------------------------------------------
+fire_smoke:
+  # Default: use HSV color heuristic (no model download needed)
+  # To use a trained YOLOv8 model, set model_path to the .pt file:
+  # model_path: "models/fire_smoke_yolov8n.pt"
+  model_path: null
+
+# ---------------------------------------------------------------------------
+# Face recognition model
+# ---------------------------------------------------------------------------
+face_recognition:
+  # InsightFace model pack — use buffalo_s for CPU, buffalo_l for GPU
+  model_name: "buffalo_s"
+  # Detection size — smaller = faster but may miss small faces
+  det_size: [640, 640]
+
+# ---------------------------------------------------------------------------
+# API settings
+# ---------------------------------------------------------------------------
+api:
+  host: "0.0.0.0"
+  port: 8000
+  secret_key: "change-this-to-a-random-secret-in-production"
+  token_expiry_minutes: 480      # 8 hours
+  # Default admin credentials (only used for initial seeding)
+  default_admin_user: "admin"
+  default_admin_password: "admin123"
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging:
+  level: "INFO"                  # DEBUG | INFO | WARNING | ERROR
+  file: "office_track.log"

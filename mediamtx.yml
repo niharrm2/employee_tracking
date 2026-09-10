@@ -1,0 +1,31 @@
+# mediamtx.yml — Test RTSP Server Configuration
+# Used with docker-compose for local development without real cameras.
+# mediamtx (formerly rtsp-simple-server) listens on port 8554.
+#
+# To push a test stream:
+#   ffmpeg -re -stream_loop -1 -i sample.mp4 -c copy -f rtsp rtsp://localhost:8554/entrance
+#
+# Then update config.yaml cameras[0].rtsp_url to: rtsp://localhost:8554/entrance
+
+logLevel: warn
+logDestinations: [stdout]
+
+# RTSP server
+rtspAddress: :8554
+rtspTransports: [tcp]
+
+# HLS server (optional — lets you preview in a browser)
+hls: yes
+hlsAddress: :8888
+
+# Allow any stream to be published without authentication (dev only)
+# In production: set authMethod and credentials
+authMethod: ""
+
+paths:
+  # Each path here corresponds to an RTSP stream endpoint.
+  # "all" means accept any stream path.
+  all:
+    # Uncomment to auto-run ffmpeg when a client connects (on-demand):
+    # runOnDemand: ffmpeg -re -stream_loop -1 -i /videos/sample.mp4 -c copy -f rtsp rtsp://localhost:8554/$MTX_PATH
+    # runOnDemandCloseAfterPublisher: yes

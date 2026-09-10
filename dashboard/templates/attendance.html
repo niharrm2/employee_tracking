@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Attendance & Shift Analytics — VisionIQ Enterprise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="page-title-group">
+        <h1>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            Attendance & Work Shift Intelligence
+        </h1>
+        <p class="page-subtitle">Historical shift rollups, presence duration analysis, break tracking, and automated audit exports.</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="filter-bar">
+            <div class="filter-group">
+                <label>Start Date</label>
+                <input type="date" id="startDate" class="form-input">
+            </div>
+            <div class="filter-group">
+                <label>End Date</label>
+                <input type="date" id="endDate" class="form-input">
+            </div>
+            <div class="filter-group">
+                <label>Department Filter</label>
+                <input type="text" id="deptFilter" placeholder="e.g. Engineering" class="form-input">
+            </div>
+            <button class="btn btn-primary" onclick="loadAttendance()">
+                <svg viewBox="0 0 24 24" width="15" height="15" style="width:15px;height:15px;flex-shrink:0;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                Apply Parameters
+            </button>
+            <div style="margin-left: auto; display: flex; gap: 8px;">
+                <button class="btn btn-outline" onclick="exportCsv(event)">
+                    <svg viewBox="0 0 24 24" width="15" height="15" style="width:15px;height:15px;flex-shrink:0;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export CSV
+                </button>
+                <button class="btn btn-outline" onclick="exportExcel(event)">
+                    <svg viewBox="0 0 24 24" width="15" height="15" style="width:15px;height:15px;flex-shrink:0;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    Export Excel (.XLSX)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h2>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+            Aggregated Shift Records
+        </h2>
+        <span class="badge badge-info" id="resultCount">— Records</span>
+    </div>
+    <div class="card-body">
+        <div id="attendanceTable" class="table-container">
+            <p class="empty-state">Select a target date range and click Apply Parameters.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
+    const today = new Date().toISOString().split('T')[0];
+    const sInput = document.getElementById('startDate');
+    const eInput = document.getElementById('endDate');
+    if (!sInput.value) sInput.value = today;
+    if (!eInput.value) eInput.value = today;
+    loadAttendance();
+});
+
+function toIsoDate(val) {
+    if (!val) return '';
+    const clean = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+    const parts = clean.replace(/\//g, '-').split('-');
+    if (parts.length === 3 && parts[2].length === 4) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    return clean;
+}
+
+async function loadAttendance() {
+    const rawStart = document.getElementById('startDate').value;
+    const rawEnd = document.getElementById('endDate').value;
+    const dept = document.getElementById('deptFilter').value.trim();
+    const start = toIsoDate(rawStart);
+    const end = toIsoDate(rawEnd);
+    if (!start || !end) return;
+
+    document.getElementById('attendanceTable').innerHTML = '<div class="loading-spinner">Compiling shift telemetry...</div>';
+    try {
+        let url = `/api/attendance/range?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`;
+        const data = await apiFetch(url);
+        const filtered = dept ? data.filter(r => r.department && r.department.toLowerCase().includes(dept.toLowerCase())) : data;
+        document.getElementById('resultCount').textContent = `${filtered.length} Records`;
+
+        if (filtered.length === 0) {
+            document.getElementById('attendanceTable').innerHTML = 
+                '<p class="empty-state">No shift records matching query parameters found.</p>';
+            return;
+        }
+        const rows = filtered.map(r => `
+            <tr>
+                <td class="mono">${escHtml(r.date)}</td>
+                <td><strong>${escHtml(r.name || r.employee_id)}</strong></td>
+                <td>${escHtml(r.department || 'General')}</td>
+                <td><span class="badge ${r.status === 'present' ? 'badge-success' : 'badge-danger'}">${r.status.toUpperCase()}</span></td>
+                <td class="mono">${r.check_in ? formatTime(r.check_in) : '—'}</td>
+                <td class="mono">${r.check_out ? formatTime(r.check_out) : '—'}</td>
+                <td class="mono">${r.presence_minutes ? Math.round(r.presence_minutes) + 'm' : '—'}</td>
+                <td>${r.late_flag ? '<span class="flag-badge flag-late">LATE</span>' : '<span class="text-muted">—</span>'}</td>
+                <td>${r.early_leave_flag ? '<span class="flag-badge flag-early">EARLY</span>' : '<span class="text-muted">—</span>'}</td>
+                <td class="mono text-muted">${r.break_minutes ? Math.round(r.break_minutes) + 'm' : '0m'}</td>
+                <td class="mono text-muted">${r.non_work_zone_minutes ? Math.round(r.non_work_zone_minutes) + 'm' : '0m'}</td>
+                <td><span class="zone-badge zone-work">${escHtml(r.last_zone || 'Floor')}</span></td>
+            </tr>
+        `).join('');
+        document.getElementById('attendanceTable').innerHTML = `
+            <table class="data-table">
+                <thead><tr>
+                    <th>Date</th><th>Personnel</th><th>Dept</th><th>Status</th>
+                    <th>First In</th><th>Last Out</th><th>Net Presence</th>
+                    <th>Late</th><th>Early</th><th>Breaks</th><th>Non-Work</th><th>Last Zone</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    } catch(e) {
+        document.getElementById('resultCount').textContent = '— Records';
+        document.getElementById('attendanceTable').innerHTML = `<p class="error-state">${escHtml(e.message || 'Failed to query attendance database.')}</p>`;
+    }
+}
+
+function exportCsv(e) {
+    e.preventDefault();
+    const start = toIsoDate(document.getElementById('startDate').value);
+    const end = toIsoDate(document.getElementById('endDate').value);
+    const token = localStorage.getItem('token') || '';
+    window.location.href = `/api/exports/attendance/csv?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}${token ? `&token=${encodeURIComponent(token)}` : ''}`;
+}
+
+function exportExcel(e) {
+    e.preventDefault();
+    const start = toIsoDate(document.getElementById('startDate').value);
+    const end = toIsoDate(document.getElementById('endDate').value);
+    const token = localStorage.getItem('token') || '';
+    window.location.href = `/api/exports/attendance/excel?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}${token ? `&token=${encodeURIComponent(token)}` : ''}`;
+}
+</script>
+{% endblock %}

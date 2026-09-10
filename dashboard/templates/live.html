@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Live Presence & Floor Telemetry — VisionIQ Enterprise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="page-title-group">
+        <h1>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            Active Floor & Presence Telemetry
+        </h1>
+        <p class="page-subtitle">Real-time occupancy tracking, desk attribution, and object telemetry &bull; Auto-syncing every 30s</p>
+    </div>
+    <div class="filter-bar">
+        <div class="filter-group">
+            <label>Presence Window (Mins)</label>
+            <input type="number" id="windowMinutes" value="15" min="1" max="120" class="form-input form-input-sm" style="width:75px">
+        </div>
+        <div class="filter-group">
+            <label>Zone Classification</label>
+            <select id="zoneFilter" class="form-input form-input-sm">
+                <option value="">All Zones</option>
+                <option value="work">Workstation Areas</option>
+                <option value="non_work">Non-Work Areas</option>
+                <option value="entrance">Access & Entrances</option>
+            </select>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="loadLive()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            Query Now
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+            </svg>
+            Personnel In Designated Zones
+        </h2>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="badge badge-success" id="presentCount">0 Verified Present</span>
+            <span class="text-muted text-sm mono" id="lastRefreshed">Syncing...</span>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="liveGrid" class="employee-grid">
+            <div class="loading-spinner">Querying edge presence models...</div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h2>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+            </svg>
+            Surveillance Feeds (Live Matrix Preview)
+        </h2>
+        <a href="/cameras" class="link-sm">Full Matrix Command Center &rarr;</a>
+    </div>
+    <div class="card-body">
+        <div class="camera-grid grid-2" id="liveCameraMiniGrid">
+            <div class="loading-spinner">Connecting to surveillance gateways...</div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h2>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                <line x1="12" y1="18" x2="12.01" y2="18"></line>
+            </svg>
+            Device & Phone Usage Log (YOLOv8 Inference)
+        </h2>
+        <span class="badge badge-info">Today's Shift</span>
+    </div>
+    <div class="card-body">
+        <div id="phoneTable" class="table-container">
+            <div class="loading-spinner">Scanning detection database...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let refreshTimer = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
+    loadLive();
+    loadPhoneDetections();
+    loadMiniCameras();
+    refreshTimer = setInterval(() => { loadLive(); loadPhoneDetections(); }, 30000);
+});
+
+async function loadMiniCameras() {
+    try {
+        const cameras = await apiFetch('/api/cameras');
+        const container = document.getElementById('liveCameraMiniGrid');
+        if (!cameras || cameras.length === 0) {
+            container.innerHTML = '<p class="empty-state">No cameras configured.</p>';
+            return;
+        }
+        container.innerHTML = cameras.map(cam => `
+            <div class="camera-card card">
+                <div class="camera-header">
+                    <div class="camera-title-group">
+                        <span class="live-pill"><span class="pulse-dot"></span>LIVE</span>
+                        <strong class="camera-name">${escHtml(cam.name)}</strong>
+                    </div>
+                    <span class="zone-badge zone-${cam.zone_type}">${escHtml(cam.zone)}</span>
+                </div>
+                <div class="camera-video-wrapper">
+                    <img class="camera-stream" src="${cam.stream_url}" alt="${escHtml(cam.name)}" loading="lazy" />
+                    <div class="camera-overlay-info">
+                        <span>${escHtml(cam.id).toUpperCase()}</span>
+                        <span>ZONE: ${escHtml(cam.zone).toUpperCase()}</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch(err) {
+        document.getElementById('liveCameraMiniGrid').innerHTML = '<p class="text-muted">Could not load feeds.</p>';
+    }
+}
+
+async function loadLive() {
+    const mins = document.getElementById('windowMinutes').value || 15;
+    const zone = document.getElementById('zoneFilter').value;
+
+    let url = `/api/live/desk?window_minutes=${mins}`;
+    if (zone) url += `&zone_type=${zone}`;
+
+    try {
+        const data = await apiFetch(url);
+        document.getElementById('presentCount').textContent = `${data.length} Verified Present`;
+        document.getElementById('lastRefreshed').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+
+        if (data.length === 0) {
+            document.getElementById('liveGrid').innerHTML = 
+                '<p class="empty-state">No personnel registered within the specified zone and time window.</p>';
+            return;
+        }
+        const cards = data.map(p => {
+            const displayName = p.name || p.employee_id;
+            const initials = displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            return `
+                <div class="employee-card">
+                    <div class="employee-avatar-circle">${escHtml(initials)}</div>
+                    <div class="employee-name">${escHtml(displayName)}</div>
+                    <div class="employee-dept">${escHtml(p.department || 'Staff')}</div>
+                    <div style="margin-bottom: 8px;">
+                        <span class="zone-badge zone-${p.zone_type}">${escHtml(p.zone)}</span>
+                    </div>
+                    <div class="employee-time">Last seen: ${formatTime(p.last_seen)}</div>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('liveGrid').innerHTML = cards;
+    } catch(e) {
+        document.getElementById('liveGrid').innerHTML = '<p class="error-state">Failed to poll live telemetry service.</p>';
+    }
+}
+
+async function loadPhoneDetections() {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const data = await apiFetch(`/api/live/phone-detections?date=${today}`);
+        if (data.length === 0) {
+            document.getElementById('phoneTable').innerHTML = 
+                '<p class="empty-state">No unauthorized phone or device usage detected during today\'s monitoring cycles.</p>';
+            return;
+        }
+        const rows = data.slice(0, 25).map(d => `
+            <tr>
+                <td class="mono">${formatTime(d.timestamp)}</td>
+                <td><span class="zone-badge zone-work">${escHtml(d.camera_id)}</span></td>
+                <td><strong>${d.detected_near_employee_id ? escHtml(d.detected_near_employee_id) : '<span class="text-muted">Unidentified Near Desk</span>'}</strong></td>
+                <td class="mono"><span class="badge badge-info">${Math.round((d.confidence || 0) * 100)}% Match</span></td>
+            </tr>
+        `).join('');
+        document.getElementById('phoneTable').innerHTML = `
+            <table class="data-table">
+                <thead><tr><th>Timestamp</th><th>Camera Channel</th><th>Attributed Subject</th><th>Model Confidence</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    } catch(e) {
+        document.getElementById('phoneTable').innerHTML = '<p class="error-state">Failed to load phone detections database.</p>';
+    }
+}
+</script>
+{% endblock %}

@@ -1,73 +1,59 @@
+﻿# ============================================================================
+# VisionIQ Enterprise Employee Tracking & Surveillance System
+# Production Requirements (CPU-Optimized)
 # ============================================================================
-# Office Tracking System — requirements.txt
-# CPU-only, pinned versions. Do NOT install onnxruntime-gpu alongside
-# onnxruntime — namespace collision will break InsightFace.
-# ============================================================================
 
-# --- Core scientific / image processing ---
-numpy==1.26.4
-opencv-python==4.10.0.84
-Pillow==10.4.0
-scipy==1.13.1
-scikit-learn==1.5.1
-scikit-image==0.24.0
+# --- Core Computer Vision & Image Processing ---
+numpy==2.5.2
+opencv-python==5.0.0.93
+pillow==12.3.0
+scipy==1.18.1
+scikit-learn==1.9.0
+scikit-image==0.26.0
 
-# --- YAML config parsing ---
-PyYAML==6.0.2
-
-# --- InsightFace (face detection + recognition) ---
-# Uses buffalo_s pack (CPU-optimized, 512-dim ArcFace embeddings)
-insightface==0.7.3
-onnxruntime==1.18.1          # CPU execution provider — do NOT use onnxruntime-gpu
-onnx==1.16.2
-
-# --- YOLOv8n (object detection: phone, extensible to badges/PPE) ---
-ultralytics==8.2.87
-# PyTorch CPU-only — avoids pulling in CUDA libraries
-# On Linux/Mac the index-url is needed; on Windows pip will select the cpu wheel
+# --- Deep Learning, Face Recognition & Detection (CPU) ---
+# Extra index URL for CPU-only PyTorch wheels
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.9.0+cpu
 torchvision==0.24.0+cpu
+ultralytics==8.4.143
+insightface==2.0
+onnx==1.22.0
+onnxruntime==1.29.0
 
-# --- Emotion detection (FER — disabled by default in config) ---
-# Requires tensorflow-cpu; do NOT install tensorflow (GPU) in the same env
-fer==22.5.1
-tensorflow-cpu==2.16.2
+# --- FastAPI Web Framework & Server ---
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.5
+pydantic-settings==2.15.0
+pydantic_core==2.46.5
+starlette==1.6.0
+python-multipart==0.0.32
 
-# --- FastAPI backend ---
-fastapi==0.111.1
-uvicorn[standard]==0.30.3
-pydantic==2.8.2
-pydantic-settings==2.3.4
-python-multipart==0.0.9      # for file upload (enrollment photos)
-python-jose[cryptography]==3.3.0   # JWT tokens
-passlib[bcrypt]==1.7.4       # password hashing
+# --- Security, Cryptography & Authentication ---
+bcrypt==5.0.0
+passlib==1.7.4
+python-jose[cryptography]==3.5.0
+cryptography==50.0.1
 
-# --- Database ---
-# SQLite is part of Python stdlib; aiosqlite for async access from FastAPI
-aiosqlite==0.20.0
-# Uncomment when switching to PostgreSQL:
-# asyncpg==0.29.0
-# psycopg2-binary==2.9.9
+# --- Configuration & Environment ---
+PyYAML==6.0.3
+python-dotenv==1.2.3
 
-# --- Scheduling ---
-APScheduler==3.10.4
+# --- Analytics, Data Export & Database ---
+aiosqlite==0.22.1
+pandas==3.0.5
+openpyxl==3.1.5
+reportlab==5.0.1
 
-# --- Data export ---
-pandas==2.2.2
-openpyxl==3.1.5              # Excel export
-reportlab==4.2.2             # PDF export
-
-# --- Templating (Jinja2 dashboard) ---
-Jinja2==3.1.4
-
-# --- Utilities ---
-tqdm==4.66.4
-requests==2.32.3
-prettytable==3.10.2
-easydict==1.13
-matplotlib==3.9.1
+# --- Templating & Scheduling ---
+Jinja2==3.1.6
+APScheduler==3.11.3
+pytz==2026.3.post1
 python-dateutil==2.9.0.post0
-pytz==2024.1
-click==8.1.7                 # CLI for enrollment.py
-rich==13.7.1                 # pretty terminal output for CLI
+
+# --- CLI, Terminal & Utilities ---
+click==8.5.0
+rich==15.0.0
+requests==2.34.2
+tqdm==4.70.0
